@@ -52,3 +52,4 @@ hdfs dfs -head /empresa/logistica/input/telemetria_limpia.csv
 
 # Auditoría de integridad y la localización física de bloques
 hdfs fsck /empresa/logistica/input/telemetria_limpia.csv -files -blocks -locations
+
