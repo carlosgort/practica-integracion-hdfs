@@ -52,18 +52,21 @@ hdfs dfs -head /empresa/logistica/input/telemetria_limpia.csv
 
 # Auditoría de integridad y la localización física de bloques
 hdfs fsck /empresa/logistica/input/telemetria_limpia.csv -files -blocks -locations
+```
 
 ---
 
 ## 3. Análisis Crítico: Tolerancia a Fallos e Integridad en HDFS
 
-En un clúster HDFS en producción, un fichero no se pierde ante el fallo o apagado repentino de un DataNode gracias a su **arquitectura de replicación distribuida y conciencia de rack (*Rack Awareness*)**. Al ingerir un archivo, HDFS lo fragmenta en bloques de gran tamaño (128 MB o 256 MB por defecto) y almacena **3 réplicas idénticas** de cada bloque en distintos servidores físicos (habitualmente dos réplicas en nodos diferentes dentro de un mismo rack y una tercera réplica en un rack distinto). Todos los DataNodes envían señales periódicas de estado (*heartbeats*, cada 3 segundos) al NameNode; cuando un nodo deja de responder y supera el tiempo de espera configurado (por defecto 10 minutos y 30 segundos), el NameNode lo marca como inactivo (*dead*), identifica en sus metadatos qué bloques han quedado sub-replicados y ordena automáticamente a los DataNodes supervivientes clonar dichos bloques hacia otros nodos sanos hasta restablecer el factor de replicación objetivo.
+Sabiendo que un fichero en HDFS no se pierde cuando se apaga o falla un DataNode porque el sistema trabaja con **replicación de bloques**. Cuando subimos un archivo a HDFS, este se divide en bloques y, por defecto, se guardan **3 copias exactas** de cada bloque repartidas en distintos DataNodes del clúster (incluso en diferentes racks o bastidores físicos). Así, si uno de los servidores se apaga de repente, los datos siguen estando disponibles en los otros dos nodos sin interrumpir el acceso al fichero
 
-Asimismo, un fichero tampoco se corrompe de forma silenciosa gracias a la **validación continua mediante sumas de comprobación (*checksums*) a nivel de bloque**. Durante la escritura, el cliente calcula un código de redundancia cíclica (`CRC32` o `CRC32C`) por cada fragmento de 512 bytes y lo guarda en un fichero oculto de metadatos (`.meta`) junto al bloque físico en el DataNode. Cada vez que un cliente lee el archivo —así como durante las auditorías periódicas en segundo plano ejecutadas por el demonio *DataBlockScanner*—, se recalcula el *checksum* de los datos almacenados en disco y se contrasta con el original: si se detecta alguna alteración por degradación del soporte físico (*bit rot*) o fallo de hardware, el bloque se reporta como corrupto al NameNode, la lectura se redirige de forma transparente hacia una réplica íntegra y el bloque dañado es sustituido por una copia válida.
+Además, el clúster tiene la capacidad de recuperarse por sí solo gracias a la comunicación constante entre los nodos. Todos los DataNodes envían cada pocos segundos una señal de estado al NameNode para confirmar que siguen funcionando, si uno deja de enviar estas señales durante un tiempo determinado, el NameNode lo da por caído, comprueba qué bloques almacenaba ese nodo y automáticamente ordena a los DataNodes que siguen activos que creen nuevas copias de esos bloques en otros servidores sanos, volviendo así a tener las 3 réplicas de seguridad
+
+Ya por último, el fichero tampoco se puede corromper gracias al uso de **sumas de comprobación. Cada vez que se escribe un bloque en HDFS, el sistema calcula un código de verificación (ej `CRC32`) y lo guarda junto al bloque. Cuando un usuario lee el archivo, o el HDFS realiza revisiones periódicas en segundo plano, vuelve a calcular ese código y lo compara con el original; si detecta que el archivo se ha dañado en el disco duro y los códigos no coinciden, ese bloque corrupto se descarta, y lee el dato desde una de las réplicas ya sanas y sustituye el bloque estropeado por una copia correcta
 
 ---
 
-## 4. Evidencias Gráficas
+## Sección 4 (Evidencias gráficas)
 
 ### 4.1. Cálculo y Validación Cruzada de Firmas SHA-256
 ![Cálculo de hashes SHA-256](evidencias/01_hashes_sha256.png)
