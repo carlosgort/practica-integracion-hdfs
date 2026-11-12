@@ -53,3 +53,27 @@ hdfs dfs -head /empresa/logistica/input/telemetria_limpia.csv
 # Auditoría de integridad y la localización física de bloques
 hdfs fsck /empresa/logistica/input/telemetria_limpia.csv -files -blocks -locations
 
+---
+
+## 3. Análisis Crítico: Tolerancia a Fallos e Integridad en HDFS
+
+En un clúster HDFS en producción, un fichero no se pierde ante el fallo o apagado repentino de un DataNode gracias a su **arquitectura de replicación distribuida y conciencia de rack (*Rack Awareness*)**. Al ingerir un archivo, HDFS lo fragmenta en bloques de gran tamaño (128 MB o 256 MB por defecto) y almacena **3 réplicas idénticas** de cada bloque en distintos servidores físicos (habitualmente dos réplicas en nodos diferentes dentro de un mismo rack y una tercera réplica en un rack distinto). Todos los DataNodes envían señales periódicas de estado (*heartbeats*, cada 3 segundos) al NameNode; cuando un nodo deja de responder y supera el tiempo de espera configurado (por defecto 10 minutos y 30 segundos), el NameNode lo marca como inactivo (*dead*), identifica en sus metadatos qué bloques han quedado sub-replicados y ordena automáticamente a los DataNodes supervivientes clonar dichos bloques hacia otros nodos sanos hasta restablecer el factor de replicación objetivo.
+
+Asimismo, un fichero tampoco se corrompe de forma silenciosa gracias a la **validación continua mediante sumas de comprobación (*checksums*) a nivel de bloque**. Durante la escritura, el cliente calcula un código de redundancia cíclica (`CRC32` o `CRC32C`) por cada fragmento de 512 bytes y lo guarda en un fichero oculto de metadatos (`.meta`) junto al bloque físico en el DataNode. Cada vez que un cliente lee el archivo —así como durante las auditorías periódicas en segundo plano ejecutadas por el demonio *DataBlockScanner*—, se recalcula el *checksum* de los datos almacenados en disco y se contrasta con el original: si se detecta alguna alteración por degradación del soporte físico (*bit rot*) o fallo de hardware, el bloque se reporta como corrupto al NameNode, la lectura se redirige de forma transparente hacia una réplica íntegra y el bloque dañado es sustituido por una copia válida.
+
+---
+
+## 4. Evidencias Gráficas
+
+### 4.1. Cálculo y Validación Cruzada de Firmas SHA-256
+![Cálculo de hashes SHA-256](evidencias/01_hashes_sha256.png)
+
+### 4.2. Verificación de Demonios Activos en el Contenedor Hadoop
+![Servicios activos NameNode y DataNode](evidencias/02_jps_servicios.png)
+
+### 4.3. Ingesta en HDFS y Auditoría Física de Bloques (`fsck`)
+![Comandos HDFS y salida de fsck](evidencias/03_hdfs_comandos_fsck.png)
+
+### 4.4. Inspección Visual en la Interfaz Web del NameNode (`localhost:9870`)
+![Explorador de archivos HDFS Web UI](evidencias/04_webui_hdfs_browse.png)
+
